@@ -1,5 +1,6 @@
 pub mod beep;
+pub mod record_wav;
 
 fn main() {
-    beep::run();
+    record_wav::run();
 }
