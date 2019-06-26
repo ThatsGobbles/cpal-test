@@ -1,3 +1,6 @@
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering as AtomicOrdering;
+
 use cpal::EventLoop;
 use cpal::UnknownTypeInputBuffer;
 use cpal::StreamData;
@@ -24,15 +27,16 @@ pub fn run() {
 
     // A flag to indicate that recording is in progress.
     println!("Begin recording...");
-    let recording = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let recording = std::sync::Arc::new(AtomicBool::new(true));
 
     // Run the input stream on a separate thread.
     let writer_2 = writer.clone();
     let recording_2 = recording.clone();
+
     std::thread::spawn(move || {
         event_loop.run(move |_id, data| {
             // If we're done recording, return early.
-            if !recording_2.load(std::sync::atomic::Ordering::Relaxed) {
+            if !recording_2.load(AtomicOrdering::Relaxed) {
                 return;
             }
             // Otherwise write to the wav writer.
@@ -72,7 +76,7 @@ pub fn run() {
 
     // Let recording go for roughly three seconds.
     std::thread::sleep(std::time::Duration::from_secs(3));
-    recording.store(false, std::sync::atomic::Ordering::Relaxed);
+    recording.store(false, AtomicOrdering::Relaxed);
     writer.lock().unwrap().take().unwrap().finalize().unwrap();
     println!("Recording {} complete!", PATH);
 }
