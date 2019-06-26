@@ -1,23 +1,30 @@
+use std::f32::consts::PI;
+
 use cpal::EventLoop;
 use cpal::UnknownTypeOutputBuffer;
 use cpal::StreamData;
 
+const AMPLITUDE: f32 = 0.25;
 const FREQUENCY: f32 = 440.0;
 
 #[derive(Clone, Copy)]
 pub enum WaveFunction {
     Sine,
-    // Square,
-    // Triangle,
-    // Saw,
+    Square,
+    Triangle,
+    Sawtooth,
+    SineMag,
 }
 
 impl WaveFunction {
     pub fn val(&self, sample_clock: u32, sample_rate: u32) -> f32 {
-        match self {
-            &WaveFunction::Sine => (sample_clock as f32 * FREQUENCY * 2.0 * std::f32::consts::PI / sample_rate as f32).sin(),
-            // &WaveFunction::Square => if sample_clock as f32 % (sample_rate as f32 / FREQUENCY) < 0.5 { 1.0 } else { -1.0 },
-            // &WaveFunction::Square => if (sample_clock as f32 * FREQUENCY * 2.0 * std::f32::consts::PI / sample_rate as f32).sin() < 0.5 { 1.0 } else { -1.0 },
+        let f_x = sample_clock as f32 * FREQUENCY / sample_rate as f32;
+        AMPLITUDE * match self {
+            &WaveFunction::Sine => (2.0 * PI * f_x).sin(),
+            &WaveFunction::Square => (-1.0f32).powf((2.0 * f_x).floor()),
+            &WaveFunction::Triangle => 1.0 - 4.0 * (0.5 - (f_x + 0.25).fract()).abs(),
+            &WaveFunction::Sawtooth => 2.0 * f_x.fract() - 1.0,
+            &WaveFunction::SineMag => 2.0 * (PI * f_x).sin().abs() - 1.0,
         }
     }
 }
@@ -43,13 +50,6 @@ impl WaveGen {
         v
     }
 }
-
-    // // Produce a square wave of maximum amplitude.
-    // let mut next_value = || {
-    //     sample_clock = (sample_clock + 1.0) % sample_rate;
-    //     if (sample_clock * FREQUENCY * 2.0 * std::f32::consts::PI / sample_rate).sin() >= 0.0 { 1.0 }
-    //     else { -1.0 }
-    // };
 
 pub fn run() {
     let device = cpal::default_output_device().unwrap();
