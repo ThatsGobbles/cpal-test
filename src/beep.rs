@@ -2,6 +2,55 @@ use cpal::EventLoop;
 use cpal::UnknownTypeOutputBuffer;
 use cpal::StreamData;
 
+const FREQUENCY: f32 = 440.0;
+
+#[derive(Clone, Copy)]
+pub enum WaveFunction {
+    Sine,
+    // Square,
+    // Triangle,
+    // Saw,
+}
+
+impl WaveFunction {
+    pub fn val(&self, sample_clock: u32, sample_rate: u32) -> f32 {
+        match self {
+            &WaveFunction::Sine => (sample_clock as f32 * FREQUENCY * 2.0 * std::f32::consts::PI / sample_rate as f32).sin(),
+            // &WaveFunction::Square => if sample_clock as f32 % (sample_rate as f32 / FREQUENCY) < 0.5 { 1.0 } else { -1.0 },
+            // &WaveFunction::Square => if (sample_clock as f32 * FREQUENCY * 2.0 * std::f32::consts::PI / sample_rate as f32).sin() < 0.5 { 1.0 } else { -1.0 },
+        }
+    }
+}
+
+pub struct WaveGen {
+    function: WaveFunction,
+    sample_rate: u32,
+    sample_clock: u32,
+}
+
+impl WaveGen {
+    pub fn new(function: WaveFunction, sample_rate: u32) -> Self {
+        Self {
+            function,
+            sample_rate,
+            sample_clock: 0,
+        }
+    }
+
+    pub fn step(&mut self) -> f32 {
+        let v = self.function.val(self.sample_clock, self.sample_rate);
+        self.sample_clock = (self.sample_clock + 1) % self.sample_rate;
+        v
+    }
+}
+
+    // // Produce a square wave of maximum amplitude.
+    // let mut next_value = || {
+    //     sample_clock = (sample_clock + 1.0) % sample_rate;
+    //     if (sample_clock * FREQUENCY * 2.0 * std::f32::consts::PI / sample_rate).sin() >= 0.0 { 1.0 }
+    //     else { -1.0 }
+    // };
+
 pub fn run() {
     let device = cpal::default_output_device().unwrap();
     let format = device.default_output_format().unwrap();
@@ -10,20 +59,15 @@ pub fn run() {
     let stream_id = event_loop.build_output_stream(&device, &format).unwrap();
     event_loop.play_stream(stream_id.clone());
 
-    let sample_rate = format.sample_rate.0 as f32;
-    let mut sample_clock = 0f32;
+    let sample_rate = format.sample_rate.0;
 
-    // Produce a sinusoid of maximum amplitude.
-    let mut next_value = || {
-        sample_clock = (sample_clock + 1.0) % sample_rate;
-        (sample_clock * 440.0 * 2.0 * 3.141592 / sample_rate).sin()
-    };
+    let mut wave_gen = WaveGen::new(WaveFunction::Sine, sample_rate);
 
     event_loop.run(move |_id, data| {
         match data {
             StreamData::Output { buffer: UnknownTypeOutputBuffer::U16(mut buffer) } => {
                 for sample in buffer.chunks_mut(format.channels as usize) {
-                    let value = ((next_value() * 0.5 + 0.5) * std::u16::MAX as f32) as u16;
+                    let value = ((wave_gen.step() * 0.5 + 0.5) * std::u16::MAX as f32) as u16;
                     for out in sample.iter_mut() {
                         *out = value;
                     }
@@ -31,7 +75,7 @@ pub fn run() {
             },
             StreamData::Output { buffer: UnknownTypeOutputBuffer::I16(mut buffer) } => {
                 for sample in buffer.chunks_mut(format.channels as usize) {
-                    let value = (next_value() * std::i16::MAX as f32) as i16;
+                    let value = (wave_gen.step() * std::i16::MAX as f32) as i16;
                     for out in sample.iter_mut() {
                         *out = value;
                     }
@@ -39,7 +83,7 @@ pub fn run() {
             },
             StreamData::Output { buffer: UnknownTypeOutputBuffer::F32(mut buffer) } => {
                 for sample in buffer.chunks_mut(format.channels as usize) {
-                    let value = next_value();
+                    let value = wave_gen.step();
                     for out in sample.iter_mut() {
                         *out = value;
                     }
